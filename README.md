@@ -129,37 +129,48 @@ forgequeue/
 
 ```bash
 docker run -d -p 6379:6379 --name forgequeue-redis redis
-
+```
 ---
 
 2️⃣ Install Python Dependencies
-
----
+```
 pip install redis uuid6 croniter
-
+```
 ▶️ Running ForgeQueue
 Terminal 1 – Worker Pool
+```
 python -m workers.pool
+```
 
 Terminal 2 – Delayed Job Scheduler
+```
 python -m scheduler.scheduler
+```
 
 Terminal 3 – Cron Scheduler
+```
 python -m scheduler.cron_scheduler
+```
 
 Terminal 4 – Enqueue Jobs
+```
 python main.py
+```
 
 ##⏱️ Metrics & Observability
 
 View live metrics:
+```
 python -m core.metrics
+```
 
 Example output:
+```
 ForgeQueue Metrics
 jobs_processed: 19
 job_exec_time: 0.027
 job_exec_time_count: 19
+```
 
 Average execution time:
 avg = job_exec_time / job_exec_time_count
