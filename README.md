@@ -42,7 +42,7 @@ ForgeQueue is a **minimal but correct** implementation of how real systems like 
 ## 🏗️ System Architecture
 
 ### High-Level Flow
-
+```
 Client / Producer
 |
 | create job
@@ -69,12 +69,12 @@ retries exceeded
 |
 v
 Dead Letter Queue
-
+```
 
 ---
 
 ### Scheduler Architecture
-
+```
 Delayed Jobs (ZSET) Cron Jobs (HASH)
 | |
 | time reached | cron tick
@@ -85,7 +85,7 @@ Delayed Scheduler Cron Scheduler
 |
 v
 Priority Queues
-
+```
 
 ---
 
@@ -125,10 +125,16 @@ forgequeue/
 
 ### 1️⃣ Start Redis (Docker – Recommended)
 
+---
+
 ```bash
 docker run -d -p 6379:6379 --name forgequeue-redis redis
 
+---
+
 2️⃣ Install Python Dependencies
+
+---
 pip install redis uuid6 croniter
 
 ▶️ Running ForgeQueue
@@ -144,7 +150,7 @@ python -m scheduler.cron_scheduler
 Terminal 4 – Enqueue Jobs
 python main.py
 
-⏱️ Metrics & Observability
+##⏱️ Metrics & Observability
 
 View live metrics:
 python -m core.metrics
@@ -158,33 +164,35 @@ job_exec_time_count: 19
 Average execution time:
 avg = job_exec_time / job_exec_time_count
 
-🛑 Graceful Shutdown
+## 🛑 Graceful Shutdown
 
-Press Ctrl + C on the worker pool:
-🛑 Worker received shutdown signal
-👷 Worker shutting down gracefully
+### Press Ctrl + C on the worker pool:
+- 🛑 Worker received shutdown signal
+- 👷 Worker shutting down gracefully
 
-In-flight jobs complete
+- In-flight jobs complete
 
-No new jobs pulled
+- No new jobs pulled
 
-Safe restart guaranteed
+- Safe restart guaranteed
 
-🔮 Future Improvements
+## 🔮 Future Improvements
+---
+- Job timeouts
 
-Job timeouts
+- Worker heartbeats
 
-Worker heartbeats
+- Web dashboard
 
-Web dashboard
+- Prometheus metrics
 
-Prometheus metrics
+- Exactly-once execution
 
-Exactly-once execution
+---
 
-⭐ Final Note
+# ⭐ Final Note
 
-ForgeQueue is a mini infrastructure component, built to demonstrate real-world backend reliability patterns such as concurrency, fault tolerance, scheduling, and observability.
+## ForgeQueue is a mini infrastructure component, built to demonstrate real-world backend reliability patterns such as concurrency, fault tolerance, scheduling, and observability.
 
 
 ---
