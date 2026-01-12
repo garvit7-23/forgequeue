@@ -201,9 +201,9 @@ avg = job_exec_time / job_exec_time_count
 
 ---
 
-# ⭐ Final Note
+## ⭐ Final Note
 
-## ForgeQueue is a mini infrastructure component, built to demonstrate real-world backend reliability patterns such as concurrency, fault tolerance, scheduling, and observability.
+### ForgeQueue is a mini infrastructure component, built to demonstrate real-world backend reliability patterns such as concurrency, fault tolerance, scheduling, and observability.
 
 
 ---
