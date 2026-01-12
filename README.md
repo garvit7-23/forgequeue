@@ -90,7 +90,7 @@ Priority Queues
 ---
 
 ## 🗂️ Project Structure
-
+```
 forgequeue/
 ├── core/
 │ ├── job.py
@@ -117,7 +117,7 @@ forgequeue/
 ├── register_cron_job.py
 ├── show_metrics.py
 └── README.md
-
+```
 
 ---
 
@@ -188,10 +188,3 @@ ForgeQueue is a mini infrastructure component, built to demonstrate real-world b
 
 
 ---
-
-## ✅ AFTER PASTING (Do This)
-
-```powershell
-git add README.md
-git commit -m "Fix README markdown formatting"
-git push
