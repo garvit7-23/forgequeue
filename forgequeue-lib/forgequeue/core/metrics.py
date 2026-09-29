@@ -16,6 +16,16 @@ def record_timing(metric: str, seconds: float):
 def snapshot():
     return redis_client.hgetall(METRICS_KEY)
 
+def queue_depth():
+    return {
+        "high": redis_client.llen("queue:high"),
+        "default": redis_client.llen("queue:default"),
+        "low": redis_client.llen("queue:low"),
+        "processing": redis_client.zcard("queue:processing"),
+        "retry": redis_client.zcard("queue:retry"),
+        "dead": redis_client.llen("queue:dead"),
+    }
+
 if __name__ == "__main__":
     print("ðŸ“Š ForgeQueue Metrics")
     for k, v in snapshot().items():

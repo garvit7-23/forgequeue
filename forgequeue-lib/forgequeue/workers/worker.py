@@ -1,24 +1,30 @@
-﻿import time
+import time
 import signal
 import sys
 import traceback   # ✅ add this
+import threading
 
 from forgequeue.redis_client import redis_client
-from forgequeue.core.queue import dequeue, move_to_dead
-from forgequeue.core.job import JobStatus
-from forgequeue.core.retry import schedule_retry
-from forgequeue.core.metrics import incr, record_timing
-from forgequeue.tasks.example import print_message, unstable_task
 
-from api.tasks.send_email_task import send_email_task
+from forgequeue.core.queue import (
+    dequeue,
+    acknowledge_job,
+    resolve_failed_job,
+    recover_expired_jobs,
+    renew_lease,
+)
+from forgequeue.core.retry import (
+    calculate_retry_delay,
+    MAX_RETRIES,
+)
+from forgequeue.core.metrics import incr, record_timing
+import forgequeue.tasks.example 
 
 SHUTDOWN = False
+RECOVERY_INTERVAL = 5
+HEARTBEAT_INTERVAL = 10
 
-TASK_REGISTRY = {
-    "print_message": print_message,
-    "unstable_task": unstable_task,
-    "SEND_EMAIL": send_email_task,
-}
+from forgequeue.core.task_registry import get_task
 
 def handle_shutdown(signum, frame):
     global SHUTDOWN
@@ -28,30 +34,80 @@ def handle_shutdown(signum, frame):
 signal.signal(signal.SIGINT, handle_shutdown)
 signal.signal(signal.SIGTERM, handle_shutdown)
 
-def run_worker():
+def renew_lease_periodically(
+    job_id,
+    execution_token,
+    stop_event,
+):
+    while not stop_event.wait(HEARTBEAT_INTERVAL):
+        try:
+            renew_lease(job_id, execution_token)
+        except ValueError:
+            # The execution no longer owns the job.
+            return
+        except Exception:
+            # Redis/network failure should not silently kill
+            # the worker's heartbeat thread.
+            traceback.print_exc()
+
+def run_worker(shutdown_event=None):
     print("Worker started...")
 
-    while not SHUTDOWN:
+    last_recovery = 0
+
+    while not SHUTDOWN and not (
+        shutdown_event and shutdown_event.is_set()
+    ):
+        now = time.time()
+
+        if now - last_recovery >= RECOVERY_INTERVAL:
+            recovered = recover_expired_jobs()
+
+            if recovered:
+                print(
+                    f"Recovered {len(recovered)} expired job(s)"
+                )
+
+            last_recovery = now
+
         item = dequeue()
         if not item:
             time.sleep(1)
             continue
 
-        job_id, job_data = item
+        job_id, job_data , execution_token = item
         task_name = job_data["task_name"]
 
-        redis_client.hset(f"job:{job_id}", "status", JobStatus.RUNNING.value)
+        
 
         start_time = time.time()
 
+        heartbeat_stop = threading.Event()
+
+        heartbeat_thread = threading.Thread(
+            target=renew_lease_periodically,
+            args=(
+                job_id,
+                execution_token,
+                heartbeat_stop,
+            ),
+            daemon=True,
+        )
+
+        heartbeat_thread.start()
+
         try:
-            TASK_REGISTRY[task_name](job_data["payload"])
+            task = get_task(task_name)
+            task(job_data["payload"])
 
             duration = time.time() - start_time
             record_timing("job_exec_time", duration)
             incr("jobs_processed")
 
-            redis_client.hset(f"job:{job_id}", "status", JobStatus.DONE.value)
+            acknowledge_job(
+                job_id,
+                execution_token,
+                            )
             print(f"Job {job_id} completed in {duration:.2f}s")
 
         except Exception as e:
@@ -62,18 +118,23 @@ def run_worker():
             traceback.print_exc()
 
             retries = int(job_data["retries"]) + 1
-            redis_client.hset(
-                f"job:{job_id}",
-                mapping={"status": JobStatus.FAILED.value, "retries": retries},
-            )
 
-            if retries <= 3:
+            delay = calculate_retry_delay(retries)
+            run_at = time.time() + delay
+
+            result = resolve_failed_job(
+                job_id,
+                execution_token,
+                retries,
+                run_at,
+                MAX_RETRIES,
+              )
+
+            if result == 1:
                 incr("jobs_retried")
-                schedule_retry(job_id, retries)
-                print(f"Retrying job {job_id} ({retries}/3)")
-            else:
+                print(f"Retrying job {job_id} ({retries}/{MAX_RETRIES})")
+            elif result == 2:
                 incr("jobs_dead")
-                move_to_dead(job_id)
                 print(f"Moved job {job_id} to dead queue")
 
     print("Worker shutting down gracefully")

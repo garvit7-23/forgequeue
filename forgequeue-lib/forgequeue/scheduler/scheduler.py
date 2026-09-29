@@ -1,18 +1,75 @@
 ﻿import time
+
 from forgequeue.redis_client import redis_client
+
 
 SCHEDULED_SET = "queue:scheduled"
 
 
+MOVE_DUE_JOB_SCRIPT = """
+local scheduled_queue = KEYS[1]
+
+local job_id = ARGV[1]
+local now = tonumber(ARGV[2])
+
+local job_key = 'job:' .. job_id
+
+local scheduled_at = redis.call('ZSCORE', scheduled_queue, job_id)
+
+if not scheduled_at then
+    return 0
+end
+
+if tonumber(scheduled_at) > now then
+    return 0
+end
+
+local status = redis.call('HGET', job_key, 'status')
+local priority = redis.call('HGET', job_key, 'priority')
+
+if not status or not priority then
+    redis.call('ZREM', scheduled_queue, job_id)
+    return -1
+end
+
+if status ~= 'CREATED' then
+    redis.call('ZREM', scheduled_queue, job_id)
+    return -1
+end
+
+redis.call('ZREM', scheduled_queue, job_id)
+
+redis.call(
+    'HSET',
+    job_key,
+    'status',
+    'QUEUED'
+)
+
+redis.call(
+    'LPUSH',
+    'queue:' .. priority,
+    job_id
+)
+
+return 1
+"""
+
+
 def run_scheduler():
-    print("â° Scheduler started (delayed jobs)...")
+    print("⏰ Scheduler started (delayed jobs)...")
+
+    move_due_job = redis_client.register_script(MOVE_DUE_JOB_SCRIPT)
 
     while True:
         now = time.time()
 
-        # fetch one due job at a time
         due = redis_client.zrangebyscore(
-            SCHEDULED_SET, 0, now, start=0, num=1
+            SCHEDULED_SET,
+            0,
+            now,
+            start=0,
+            num=1,
         )
 
         if not due:
@@ -20,22 +77,15 @@ def run_scheduler():
             continue
 
         job_id = due[0]
-        redis_client.zrem(SCHEDULED_SET, job_id)
 
-        # fetch job metadata ONLY to determine priority
-        job_data = redis_client.hgetall(f"job:{job_id}")
-        if not job_data:
-            continue
+        result = move_due_job(
+            keys=[SCHEDULED_SET],
+            args=[job_id, now],
+        )
 
-        priority = job_data["priority"]
-        queue_name = f"queue:{priority}"
-
-        # enqueue job ID only (do NOT touch job hash)
-        redis_client.lpush(queue_name, job_id)
-
-        print(f"â³ Scheduled job {job_id} enqueued")
+        if result == 1:
+            print(f"⏳ Scheduled job {job_id} enqueued")
 
 
 if __name__ == "__main__":
     run_scheduler()
-

@@ -1,31 +1,40 @@
 ﻿import multiprocessing
+
 from forgequeue.workers.worker import run_worker
-import signal
-import sys
+
+
+def shutdown_pool(processes, shutdown_event):
+    print(" Shutting down worker pool...")
+    shutdown_event.set()
+
+    for process in processes:
+        process.join()
+
+    print("Worker pool shut down gracefully")
 
 
 def start_worker_pool(num_workers: int):
-    print(f"ðŸš€ Starting worker pool with {num_workers} workers")
+    print(f" Starting worker pool with {num_workers} workers")
+
+    shutdown_event = multiprocessing.Event()
 
     processes = []
+
     for _ in range(num_workers):
-        p = multiprocessing.Process(target=run_worker)
-        p.start()
-        processes.append(p)
+        process = multiprocessing.Process(
+            target=run_worker,
+            args=(shutdown_event,),
+        )
+        process.start()
+        processes.append(process)
 
-    for p in processes:
-        p.join()
+    try:
+        for process in processes:
+            process.join()
 
-def shutdown_pool(signum, frame):
-    print("ðŸ›‘ Shutting down worker pool...")
-    for p in processes:
-        p.terminate()
-    sys.exit(0)
+    except KeyboardInterrupt:
+        shutdown_pool(processes, shutdown_event)
 
-
-signal.signal(signal.SIGINT, shutdown_pool)
-signal.signal(signal.SIGTERM, shutdown_pool)
 
 if __name__ == "__main__":
     start_worker_pool(num_workers=4)
-

@@ -1,8 +1,7 @@
-﻿import json
 import time
 from forgequeue.redis_client import redis_client
 from forgequeue.core.job import Job, Priority
-from forgequeue.core.queue import enqueue
+from forgequeue.core.queue import enqueue , schedule_job
 
 
 # ---------- IMMEDIATE JOB ----------
@@ -14,7 +13,6 @@ def enqueue_immediate_jobs():
     ]
 
     for job in jobs:
-        job.payload = json.dumps(job.payload)
         enqueue(job)
         print(f"ðŸ“¤ Enqueued immediate {job.priority.value} job {job.id}")
 
@@ -27,16 +25,10 @@ def enqueue_delayed_job(delay_seconds: int = 10):
         priority=Priority.HIGH
     )
 
-    job.payload = json.dumps(job.payload)
 
-    # store job metadata
-    redis_client.hset(
-        f"job:{job.id}",
-        mapping=job.to_dict()
-    )
 
     run_at = time.time() + delay_seconds
-    redis_client.zadd("queue:scheduled", {job.id: run_at})
+    schedule_job(job, run_at)
 
     print(f"â³ Scheduled job {job.id} to run in {delay_seconds}s")
 
@@ -51,7 +43,7 @@ def register_cron_job():
 
     # IMPORTANT: stable ID for cron jobs
     job.id = "cron-job-1"
-    job.payload = json.dumps(job.payload)
+    
 
     # store job metadata ONCE
     redis_client.hset(
@@ -76,4 +68,3 @@ if __name__ == "__main__":
     enqueue_immediate_jobs()
     enqueue_delayed_job(delay_seconds=10)
     register_cron_job()
-

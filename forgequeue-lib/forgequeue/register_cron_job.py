@@ -1,6 +1,5 @@
-﻿import json
-from forgequeue.redis_client import redis_client
-from forgequeue.core.job import Job, Priority
+﻿from forgequeue.core.job import Job, Priority
+from forgequeue.core.queue import register_cron_job
 
 # 1ï¸âƒ£ Create job metadata
 job = Job.create(
@@ -13,13 +12,7 @@ job = Job.create(
 job_id = "cron-job-1"
 job.id = job_id
 
-job.payload = json.dumps(job.payload)
+register_cron_job(job, "* * * * *")
 
-# Store job hash in Redis
-redis_client.hset(
-    f"job:{job_id}",
-    mapping=job.to_dict()
-)
-
-print(f"âœ… Created cron job metadata: job:{job_id}")
+print(f"✅ Registered cron job: {job_id}")
 
